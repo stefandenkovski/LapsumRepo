@@ -21,12 +21,12 @@ dset is going to be the compressed hp5y file name of your dataset
 # crawls location of drive for all the falls/nonfalls and the images 
 
 
-folder_location = 'F:\Edits\IP' # location of were your dataset is stored 
+folder_location = 'F:\Edits\ZED_RGB' # location of were your dataset is stored 
 
 img_width = 64
 img_height = 64
 raw = False
-dset = 'IP_Edit'
+dset = 'ZED_RGB_Edit'
 
 
 def get_dir_lists(dset, folder_location):
