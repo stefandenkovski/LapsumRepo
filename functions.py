@@ -136,15 +136,15 @@ def get_total_performance_metrics(frame_stats, window_stats, window_len):
 def get_performance_values(vid_mean, vid_std, vid_labels):
 
     # calculate metrics for Standard Deviation 
-    fpr, tpr, thresholds = roc_curve(y_true=vid_labels[:-1], y_score=vid_std, pos_label=1)
+    fpr, tpr, thresholds = roc_curve(y_true=vid_labels[:len(vid_std)], y_score=vid_std, pos_label=1)
     std_AUROC = auc(fpr, tpr)
-    precision, recall, thresholds = precision_recall_curve(vid_labels[:-1], vid_std)
+    precision, recall, thresholds = precision_recall_curve(vid_labels[:len(vid_std)], vid_std)
     std_AUPR = auc(recall, precision)
 
     # calculate the Mean AUC
-    fpr, tpr, thresholds = roc_curve(y_true=vid_labels[:-1], y_score=vid_mean, pos_label=1)
+    fpr, tpr, thresholds = roc_curve(y_true=vid_labels[:len(vid_std)], y_score=vid_mean, pos_label=1)
     mean_AUROC = auc(fpr, tpr)
-    precision, recall, thresholds = precision_recall_curve(vid_labels[:-1], vid_mean)
+    precision, recall, thresholds = precision_recall_curve(vid_labels[:len(vid_std)], vid_mean)
     mean_AUPR = auc(recall, precision)
     #print(std_AUROC, std_AUPR, mean_AUROC, mean_AUPR)
     return std_AUROC, mean_AUROC, std_AUPR, mean_AUPR
