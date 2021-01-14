@@ -9,6 +9,8 @@ import re
 dset = 'IP'
 path = 'F:/{}/'.format(dset)
 
+# Ip _ 1280, ONI 1218, ZED 1303, Thermal - 1250
+
 # get the list of falls and nonfall folders 
 current_frame_rate = 20
 desired_frame_rate = 8 

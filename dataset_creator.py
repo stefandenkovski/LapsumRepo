@@ -21,12 +21,12 @@ dset is going to be the compressed hp5y file name of your dataset
 # crawls location of drive for all the falls/nonfalls and the images 
 
 
-folder_location = 'F:\Edits\ZED_RGB' # location of were your dataset is stored 
+folder_location = 'F:\Edits\Thermal' # location of were your dataset is stored 
 
 img_width = 64
 img_height = 64
 raw = False
-dset = 'ZED_RGB_Edit'
+dset = 'Thermal_Edit'
 
 
 def get_dir_lists(dset, folder_location):
@@ -113,6 +113,15 @@ def init_vid(vid_dir, vid_class, img_width, img_height, hf, raw,  dset):
         h5py group: group within which new group is nested
     '''
     vid_dir_name = os.path.basename(vid_dir)
+    m = re.search(r'\d+$', vid_dir_name)
+    fall_number = int(m.group())
+    import pandas as pd
+    my_data = pd.read_csv(folder_location + '/Labels.csv')
+    current_vid = my_data[my_data.Video == fall_number]
+    if len(current_vid) == 0:
+        print('Skipping {} as it does not contain a fall'.format(vid_dir_name))
+        return
+    
     print('-----------------------')
     print('initializing vid at', vid_dir_name)
     raw = True
@@ -141,6 +150,8 @@ def get_fall_indeces(Fall_name, labels, dset):
     
     current_vid = my_data[my_data.Video == fall_number]
     print(current_vid)
+    if len(current_vid) == 0:
+        return
 
     if len(current_vid) == 1:
         print("Single Fall")
