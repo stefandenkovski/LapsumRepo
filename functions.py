@@ -12,6 +12,7 @@ from sklearn.metrics import roc_auc_score
 import datetime
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
+import re
 from io import StringIO
 import ffmpeg
 import pdb
@@ -24,7 +25,7 @@ from sklearn.metrics import (
     auc,
     precision_recall_curve,
 )
-
+import pdb
 
 """
  Function that takes inputs (sample, reconstruction, and label)
@@ -306,20 +307,38 @@ def animate_fall_detect_present(
     # plt.show()
     # return ani
 
-def create_pytorch_dataset(name, dset, path, window_len, stride):
+def create_pytorch_dataset(name, dset, path, window_len, fair_compairson, stride):
     falls = []
     adl = []
-
-    # create list of all fall and nonfall folders
-    for (root, dirs, files) in os.walk("F:/{}/Fall".format(dset)):
-        if len(dirs) > 0:
-            falls.extend(dirs)
-    for (root, dirs, files) in os.walk("F:/{}/NonFall".format(dset)):
-        if len(dirs) > 0:
-            adl.extend(dirs)
-    print(falls)
-    print(adl)
-    
+    if fair_compairson == True:
+        shared_adl_vids = np.loadtxt('shared_adl_vids.txt').astype(int)
+        shared_fall_vids = np.loadtxt('shared_fall_vids.txt').astype(int)
+        print(shared_fall_vids)
+        # create list of all fall and nonfall folders
+        for (root, dirs, files) in os.walk("F:/{}/Fall".format(dset)):
+            for dir in dirs:
+                x = re.findall('[0-9]+', dir)[0]
+                if int(x) in shared_fall_vids:
+                    falls.append(dir)
+        
+        for (root, dirs, files) in os.walk("F:/{}/NonFall".format(dset)):
+            for dir in dirs:
+                x = re.findall('[0-9]+', dir)[0]
+                if int(x) in shared_adl_vids:
+                    adl.append(dir)
+        print(falls)
+        print(adl)
+    elif fair_compairson == False:
+        # create list of all fall and nonfall folders
+        for (root, dirs, files) in os.walk("F:/{}/Fall".format(dset)):
+            if len(dirs) > 0:
+                falls.extend(dirs)
+        for (root, dirs, files) in os.walk("F:/{}/NonFall".format(dset)):
+            if len(dirs) > 0:
+                adl.extend(dirs)
+        print(falls)
+        print(adl)
+        
 
     x_data_fall = []
     y_data_fall = []
