@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import pandas as pd
+
 from sklearn.metrics import roc_auc_score
 import datetime
 import matplotlib.animation as animation
@@ -139,17 +140,29 @@ def get_performance_values(vid_mean, vid_std, vid_labels):
     # calculate metrics for Standard Deviation 
     fpr, tpr, thresholds = roc_curve(y_true=vid_labels[:len(vid_std)], y_score=vid_std, pos_label=1)
     std_AUROC = auc(fpr, tpr)
-    precision, recall, thresholds = precision_recall_curve(vid_labels[:len(vid_std)], vid_std)
-    std_AUPR = auc(recall, precision)
+    
+    std_precision, std_recall, thresholds = precision_recall_curve(vid_labels[:len(vid_std)], vid_std)
+    std_AUPR = auc(std_recall, std_precision)
 
     # calculate the Mean AUC
-    fpr, tpr, thresholds = roc_curve(y_true=vid_labels[:len(vid_std)], y_score=vid_mean, pos_label=1)
+    fpr, tpr, thresholds = roc_curve(y_true=vid_labels[:len(vid_std)], y_score = vid_mean, pos_label=1)
     mean_AUROC = auc(fpr, tpr)
-    precision, recall, thresholds = precision_recall_curve(vid_labels[:len(vid_std)], vid_mean)
-    mean_AUPR = auc(recall, precision)
-    #print(std_AUROC, std_AUPR, mean_AUROC, mean_AUPR)
-    return std_AUROC, mean_AUROC, std_AUPR, mean_AUPR
+    
+    mean_precision, mean_recall, thresholds = precision_recall_curve(vid_labels[:len(vid_std)], vid_mean)
+    mean_AUPR = auc(mean_recall, mean_precision)
 
+    # retrieve just the probabilities for the positive class
+    pos_probs = vid_labels[:, 1]
+    no_skill = len(vid_labels[vid_labels==1]) / len(vid_labels)
+    plt.plot([0, 1], [no_skill, no_skill], linestyle='--', label='No Skill')
+    plt.plot(std_recall, std_precision, marker='.', label='Logistic')
+    plt.plot(mean_recall, mean_precision, marker=',', label='Logistic')
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.savefig('graphs/PR_Curve.png')
+
+    #print('-------------------------------------')
+    return std_AUROC, mean_AUROC, std_AUPR, mean_AUPR 
 
 
 

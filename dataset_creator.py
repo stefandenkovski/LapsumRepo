@@ -21,12 +21,13 @@ dset is going to be the compressed hp5y file name of your dataset
 # crawls location of drive for all the falls/nonfalls and the images 
 
 
-folder_location = 'F:\Edits\Thermal' # location of were your dataset is stored 
+folder_location = 'F:\Edits\ONI_Depth' # location of were your dataset is stored 
 
 img_width = 64
 img_height = 64
 raw = False
-dset = 'Thermal_Edit'
+fill_depth = True
+dset = 'ONI_Depth_Filled'
 
 
 def get_dir_lists(dset, folder_location):
@@ -190,9 +191,13 @@ def create_img_data_set(fpath, ht = 128, wd = 128, raw = False, sort = True, dse
         for x,i in zip(frames, range(0,frames.__len__())):
             #print(x,i)
             img=cv2.imread(x,0) #Use this for RGB to GS
-            #print('x', x)
-            #img=cv2.imread(x,-1) #Use this for loading as is(ie. 16 bit needs this, else gets converted to 8)
-            # print('img.shape', img.shape)
+            if fill_depth == True:
+                thresh,maxval= 20,255
+                th, im_th = cv2.threshold(img, thresh, maxval, cv2.THRESH_BINARY_INV)
+                #print(np.amax(im_th), np.amin(im_th))
+                mask = im_th
+                dst = cv2.inpaint(img,mask,3, cv2.INPAINT_NS) #paints non-zero pixels
+            img = dst
             img=cv2.resize(img,(ht,wd))#resize
             img=img.reshape(ht,wd,1)
 
