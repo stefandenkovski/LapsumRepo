@@ -9,7 +9,6 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import pandas as pd
 
-from sklearn.metrics import roc_auc_score
 import datetime
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
@@ -101,6 +100,7 @@ def get_frame_metrics(sample, output, labels, window_len):
 
 
 def get_total_performance_metrics(frame_stats, window_stats, window_len):
+    get_curves_and_thresholds(frame_stats, window_stats, window_len)
 
     video_metrics = np.zeros((len(frame_stats), 5, window_len ))
     print(video_metrics.shape)
@@ -116,6 +116,7 @@ def get_total_performance_metrics(frame_stats, window_stats, window_len):
         # store frame results for this vidoe
         video_metrics[i, 0, 0], video_metrics[i, 1, 0], video_metrics[i, 2, 0], video_metrics[i, 3, 0] = get_performance_values(frame_mean, frame_std, frame_labels)
         video_metrics[i, 4, 0] = 0 
+
         # store each thresholds results for this video 
         for j in range(1, window_len):
             vid_labels = window_labels[j-1]
@@ -126,23 +127,165 @@ def get_total_performance_metrics(frame_stats, window_stats, window_len):
             video_metrics[i, 0, j], video_metrics[i, 1, j], video_metrics[i, 2, j], video_metrics[i, 3, j] = get_performance_values(mean_window_error[j-1], std_window_error[j-1], vid_labels)
             video_metrics[i, 4, j] = j 
     
-    print('saving')
-
     video_metrics[video_metrics == 0] = np.nan
-    final_performance = np.nanmean(video_metrics, axis=0) # get the mean performance across all videos 
+    final_performance_mean = np.nanmean(video_metrics, axis=0) # get the mean performance across all videos 
+    final_performance_std = np.nanstd(video_metrics, axis=0)
 
     #np.savetxt('results.csv', final_performance, delimiter=',', fmt='%d')
-    pd.DataFrame(final_performance).to_csv("results.csv")
+
+    pd.DataFrame(final_performance_mean).to_csv("results_mean.csv")
+    pd.DataFrame(final_performance_std).to_csv("results_std.csv")
+    
+    return(final_performance_mean, final_performance_std)
+
+
+def get_curves_and_thresholds(frame_stats, window_stats, window_len):
+    frame_mean_flat = [] 
+    frame_std_flat = []
+    frame_labels_flat = []
+    for i in range(len(frame_stats)):
+        # print(i)
+        # this a single video metrics
+        frame_mean, frame_std, frame_labels = frame_stats[i]
+        frame_mean_flat.extend(frame_mean)
+        frame_std_flat.extend(frame_std)
+        frame_labels_flat.extend(frame_labels[:len(frame_std)])
+    
+    
+    def plot_ROC_AUC(fpr, tpr, roc_auc, data_option):
+        plt.figure()
+        lw = 2
+        plt.plot(fpr, tpr, color='darkorange',
+            lw=lw, label='ROC curve (area = %0.4f)' % roc_auc)
+        plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Receiver Operating Characteristic for {}'.format(data_option))
+        plt.legend(loc="lower right")
+        plt.savefig('graphs/{}ROC_AUC.png'.format(data_option))
+        
+    def plot_PR_AUC(precision, recall, mean_AUPR, no_skill, data_option):
+        plt.figure()
+        plt.plot([0,1], [no_skill,no_skill], linestyle='--', label='No Skill (area = %0.4f)' % no_skill)
+        plt.plot(recall, precision, marker='.', label='AUPR curve (area = %0.4f)' % mean_AUPR)
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, max(precision)/5])
+        plt.xlabel('Recall')
+        plt.ylabel('Precision')
+        plt.title('Precision Recall Curve for {}'.format(data_option))
+        plt.legend(loc="lower right")
+        plt.savefig('graphs/{}PR_AUC.png'.format(data_option))
+        
+    # calculate metrics for Standard Deviation 
+    roc_fpr, roc_tpr, roc_thresholds = roc_curve(y_true=frame_labels_flat, y_score=frame_std_flat, pos_label=1)
+    std_AUROC = auc(roc_fpr, roc_tpr)
+    data_option = 'STD of Reconstruction Error'
+    plot_ROC_AUC(roc_fpr, roc_tpr, std_AUROC, data_option) 
+    
+    precision, recall, pr_thresholds = precision_recall_curve(frame_labels_flat, frame_std_flat, pos_label=1)
+    data_option = 'STD of Reconstruction Error'
+    no_skill = frame_labels_flat.count(1) / len(frame_labels_flat)
+    mean_AUPR = auc(recall, precision )
+    plot_PR_AUC(precision, recall, mean_AUPR, no_skill, data_option)
+    
+    '''
+    gmeans = np.sqrt(roc_tpr * (1-roc_fpr))
+    ix = np.argmax(gmeans)
+    print('Best Threshold=%f, G-Mean=%.3f' % (roc_thresholds[ix], gmeans[ix]))
+    optimal_threshold = roc_thresholds[ix]
+    '''
+    
+    optimal_idx = np.argmax(roc_tpr - roc_fpr)
+    optimal_threshold = roc_thresholds[optimal_idx]
+
+    for i in range(len(frame_std_flat)):
+        if frame_std_flat[i] >= optimal_threshold:
+            frame_std_flat[i] = 1
+        else:
+            frame_std_flat[i] = 0
+
+    tn, fp, fn, tp = confusion_matrix(frame_labels_flat, frame_std_flat).ravel()    
+    TPR = tp/(tp+fn)
+    FPR = fp/(fp+tn) 
+    Precision = tp/(tp+fp)
+    Recall = tp/(tp+fn)
+    print("----------------------------------")
+    print("STD Global Classification Results")
+    print('TPR {:.3f}, FPR {:.3f}, Precision {:.3f}, Recall {:.3f}'.format(TPR, FPR, Precision, Recall))
+    print('tn {}, fp {}, fn {}, tp {}'.format(tn, fp, fn, tp))
+    print("std_AUROC  {:.3f}".format(std_AUROC))
+    print("----------------------------------")
+
+
+
+
+    # calculate the Mean AUC
+    roc_fpr, roc_tpr, roc_thresholds = roc_curve(y_true=frame_labels_flat, y_score=frame_mean_flat, pos_label=1)
+    mean_AUROC = auc(roc_fpr, roc_tpr)
+    data_option = 'Mean of Reconstruction Error'
+    plot_ROC_AUC(roc_fpr,roc_tpr, mean_AUROC, data_option)
+    
+    precision, recall, thresholds = precision_recall_curve(frame_labels_flat, frame_mean_flat, pos_label=1)
+    data_option = 'Mean of Reconstruction Error'
+    no_skill = frame_labels_flat.count(1) / len(frame_labels_flat)
+    mean_AUPR = auc(recall, precision )
+    plot_PR_AUC(precision, recall, mean_AUPR, no_skill, data_option)
+    
+    optimal_idx = np.argmax(roc_tpr - roc_fpr)
+    optimal_threshold = roc_thresholds[optimal_idx]
+
+    for i in range(len(frame_mean_flat)):
+        if frame_mean_flat[i] >= optimal_threshold:
+            frame_mean_flat[i] = 1
+        else:
+            frame_mean_flat[i] = 0
+
+    tn, fp, fn, tp = confusion_matrix(frame_labels_flat, frame_mean_flat).ravel()    
+    TPR = tp/(tp+fn)
+    FPR = fp/(fp+tn) 
+    Precision = tp/(tp+fp)
+    Recall = tp/(tp+fn)
+    print("----------------------------------")
+    print("Mean Global Classification Results")
+    print('TPR {:.3f}, FPR {:.3f}, Precision {:.3f}, Recall {:.3f}'.format(TPR, FPR, Precision, Recall))
+    print('tn {}, fp {}, fn {}, tp {}'.format(tn, fp, fn, tp))
+    print("mean_AUROC {:.3f}".format(mean_AUROC))
+    print("----------------------------------")
+
+
+    return()
+
 
 
 def get_performance_values(vid_mean, vid_std, vid_labels):
+    
 
     # calculate metrics for Standard Deviation 
-    fpr, tpr, thresholds = roc_curve(y_true=vid_labels[:len(vid_std)], y_score=vid_std, pos_label=1)
-    std_AUROC = auc(fpr, tpr)
-    
+    std_fpr, std_tpr, std_thresholds = roc_curve(y_true=vid_labels[:len(vid_std)], y_score=vid_std, pos_label=1)
+    std_AUROC = auc(std_fpr, std_tpr)
+
     std_precision, std_recall, thresholds = precision_recall_curve(vid_labels[:len(vid_std)], vid_std)
     std_AUPR = auc(std_recall, std_precision)
+    
+    '''
+    optimal_idx = np.argmax(std_tpr - std_fpr)
+    optimal_threshold = std_thresholds[optimal_idx]
+    for i in range(len(vid_std)):
+        if vid_std[i] >= optimal_threshold:
+            vid_std[i] = 1
+        else:
+            vid_std[i] = 0
+            
+    print("Optimal Mean Threshold value is:", optimal_threshold)
+    std_f1 = f1_score(vid_labels[:len(vid_std)], vid_std)
+    print('individual F1', std_f1)
+    tn, fp, fn, tp = confusion_matrix(vid_labels[:len(vid_std)], vid_std).ravel()
+    print(tn, fp, fn, tp)
+    '''
+
+
 
     # calculate the Mean AUC
     fpr, tpr, thresholds = roc_curve(y_true=vid_labels[:len(vid_std)], y_score = vid_mean, pos_label=1)
@@ -150,20 +293,10 @@ def get_performance_values(vid_mean, vid_std, vid_labels):
     
     mean_precision, mean_recall, thresholds = precision_recall_curve(vid_labels[:len(vid_std)], vid_mean)
     mean_AUPR = auc(mean_recall, mean_precision)
-
-    # retrieve just the probabilities for the positive class
-    pos_probs = vid_labels[:, 1]
-    no_skill = len(vid_labels[vid_labels==1]) / len(vid_labels)
-    plt.plot([0, 1], [no_skill, no_skill], linestyle='--', label='No Skill')
-    plt.plot(std_recall, std_precision, marker='.', label='Logistic')
-    plt.plot(mean_recall, mean_precision, marker=',', label='Logistic')
-    plt.xlabel('Recall')
-    plt.ylabel('Precision')
-    plt.savefig('graphs/PR_Curve.png')
+    data_option = 'Mean Err'
 
     #print('-------------------------------------')
     return std_AUROC, mean_AUROC, std_AUPR, mean_AUPR 
-
 
 
 
